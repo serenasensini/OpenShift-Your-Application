@@ -1,0 +1,223 @@
+# STEP 1: COPIARE TEMPLATE
+
+apiVersion: template.openshift.io/v1
+kind: Template
+labels:
+  template: my-container-day-template
+message: My Template
+metadata:
+  annotations:
+    description: Template for Container Day
+    openshift.io/display-name: Template for Container Day
+    openshift.io/documentation-url: www.theredcode.it
+    openshift.io/long-description: >-
+      Very long description
+    openshift.io/provider-display-name: TheRedCode
+  name: my-container-day-template
+objects:
+  # STEP 2: quali componenti aggiungere? SS per il db e DC per la webapp
+  - apiVersion: apps.openshift.io/v1
+    kind: DeploymentConfig
+    metadata:
+      name: wikijs-fe
+    spec:
+      replicas: 1
+      selector:
+        name: wikijs-fe
+      template:
+        metadata:
+          labels:
+            name: wikijs-fe
+        spec:
+          containers:
+            - env:
+                - name: DB_TYPE
+                  value: postgres
+                - name: DB_HOST
+                  value: postgresql
+                - name: DB_PORT
+                  value: "5432"
+                - name: DB_SSL
+                  value: "false"
+                - name: DB_NAME
+                  valueFrom:
+                    secretKeyRef:
+                      key: database-name
+                      name: postgresql
+                - name: DB_USER
+                  valueFrom:
+                    secretKeyRef:
+                      key: database-user
+                      name: postgresql
+                - name: DB_PASS
+                  valueFrom:
+                    secretKeyRef:
+                      key: database-password
+                      name: postgresql
+              image: docker.io/lucadentella/wikijs-ocp4-sideload:2.5
+              imagePullPolicy: IfNotPresent
+              name: wikijs-fe
+              ports:
+                - containerPort: 3000
+                  name: http
+                  protocol: TCP
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+          dnsPolicy: ClusterFirst
+          restartPolicy: Always
+          schedulerName: default-scheduler
+          securityContext: { }
+          terminationGracePeriodSeconds: 30
+  - apiVersion: apps.openshift.io/v1
+    kind: DeploymentConfig
+    metadata:
+      annotations:
+        template.alpha.openshift.io/wait-for-ready: 'true'
+      name: 'postgresql'
+    spec:
+      replicas: 1
+      selector:
+        name: 'postgresql'
+      strategy:
+        type: Recreate
+      template:
+        metadata:
+          labels:
+            name: 'postgresql'
+        spec:
+          containers:
+            - resources:
+                limits:
+                  memory: '512Mi'
+#              readinessProbe:
+#                exec:
+#                  command:
+#                    - /usr/libexec/check-container
+#                initialDelaySeconds: 5
+#                timeoutSeconds: 1
+              terminationMessagePath: /dev/termination-log
+              name: postgresql
+#              livenessProbe:
+#                exec:
+#                  command:
+#                    - /usr/libexec/check-container
+#                    - '--live'
+#                initialDelaySeconds: 120
+#                timeoutSeconds: 10
+              env:
+                - name: POSTGRESQL_USER
+                  valueFrom:
+                    secretKeyRef:
+                      key: database-user
+                      name: 'postgresql'
+                - name: POSTGRESQL_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      key: database-password
+                      name: 'postgresql'
+                - name: POSTGRESQL_DATABASE
+                  valueFrom:
+                    secretKeyRef:
+                      key: database-name
+                      name: 'postgresql'
+              ports:
+                - containerPort: 5432
+                  protocol: TCP
+              imagePullPolicy: IfNotPresent
+              volumeMounts:
+                - mountPath: /var/lib/pgsql/data
+                  name: 'postgresql-data'
+              capabilities: { }
+              image: ' '
+          dnsPolicy: ClusterFirst
+          restartPolicy: Always
+          volumes:
+            - name: 'postgresql-data'
+              persistentVolumeClaim:
+                claimName: 'postgresql'
+      triggers:
+        - imageChangeParams:
+            automatic: true
+            containerNames:
+              - postgresql
+            from:
+              kind: ImageStreamTag
+              name: 'postgresql:10-el8'
+              namespace: 'openshift'
+            lastTriggeredImage: ''
+          type: ImageChange
+        - type: ConfigChange
+    status: { }
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      annotations:
+        template.openshift.io/expose-uri: >-
+          postgres://{.spec.clusterIP}:{.spec.ports[?(.name=="postgresql")].port}
+      name: 'postgresql'
+    spec:
+      ports:
+        - name: postgresql
+          nodePort: 0
+          port: 5432
+          protocol: TCP
+          targetPort: 5432
+      selector:
+        name: 'postgresql'
+      sessionAffinity: None
+      type: ClusterIP
+    status:
+      loadBalancer: { }
+  # STEP 3: ConfigMap e Secrets
+  - apiVersion: v1
+      kind: Secret
+      metadata:
+        annotations:
+          template.openshift.io/expose-database_name: '{.data[''database-name'']}'
+          template.openshift.io/expose-password: '{.data[''database-password'']}'
+          template.openshift.io/expose-username: '{.data[''database-user'']}'
+        name: 'postgresql'
+      stringData:
+        database-name: 'wiki'
+        database-password: 'wikijsrocks'
+        database-user: 'wikijs'
+  # STEP 4: connettività: servizi e rotte
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: wikijs-fe
+      namespace: wikijs
+    spec:
+      ports:
+        - name: http
+          port: 3000
+          protocol: TCP
+          targetPort: http
+      selector:
+        deploymentconfig: wikijs-fe
+      sessionAffinity: None
+      type: ClusterIP
+  - apiVersion: route.openshift.io/v1
+    kind: Route
+    metadata:
+      labels: { }
+      name: wikijs-fe
+    spec:
+      port:
+        targetPort: http
+      tls:
+        termination: edge
+      to:
+        kind: Service
+        name: wikijs-fe
+   # STEP 5: persistenza
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: 'postgresql'
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: '1Gi'

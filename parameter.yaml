@@ -1,0 +1,6 @@
+- description: >-
+    %DESCRIPTION%
+  displayName: %SHOWN_VARIABLE_NAME%
+  name: %ENV_VARIABLE%
+  value: %VALUE%
+  required: %REQUIRED%

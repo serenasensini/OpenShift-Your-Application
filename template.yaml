@@ -1,0 +1,16 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+labels:
+  template: Some label
+message: Lorem ipsum
+metadata:
+  annotations:
+    description: Lorem ipsum
+    openshift.io/display-name: Some name
+    openshift.io/documentation-url: Some URL
+    openshift.io/long-description: >-
+      Very long description
+    openshift.io/provider-display-name: Some who
+  name: Some template name
+objects: []
+parameters: []

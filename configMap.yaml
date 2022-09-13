@@ -1,0 +1,14 @@
+# EXAMPLE OF A CONFIGMAP
+- apiVersion: v1
+  data:
+    # EXAMPLE OF DATA STORED IN THIS CONFIGMAP
+    %KEY%: %VALUE%
+    %KEY%: ${PARAM_NAME}
+    # Some examples
+     JAVA_OPTS: "-XX:+ExitOnOutOfMemoryError\t-XX:InitialRAMPercentage=75.0 -XX:MinRAMPercentage=75.0\t-XX:MaxRAMPercentage=80.0 -XX:NativeMemoryTracking=summary"
+     MONGODB_NAME: '${MONGODB_NAME}'
+  kind: ConfigMap
+  metadata:
+    labels:
+      app: '${APP_NAME}'
+    name: '${APP_NAME}-%CONFIG_MAP_NAME%'
